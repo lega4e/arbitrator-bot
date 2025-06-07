@@ -1,0 +1,40 @@
+{
+  "name": "arbitrator-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for commu-chat",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "NODE_NO_WARNINGS=1 node dist/index.js",
+    "build": "tsc",
+    "dev": "cp .env.local .env && tsc && node dist/index.js",
+    "docker": "cp .env.docker .env && docker-compose up --build",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@types/nedb": "^1.8.16",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.1",
+    "module-alias": "^2.2.3",
+    "nedb": "^1.8.0",
+    "reflect-metadata": "^0.2.2",
+    "telegraf": "^4.15.3",
+    "tslog": "^4.9.3",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.5",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.3.3"
+  },
+  "_moduleAliases": {
+    "@": "dist"
+  }
+}
