@@ -6,12 +6,18 @@ export default class Db<T> {
   constructor(
     private readonly filename: string,
     private readonly defaultData: T,
+    private readonly pretty: boolean = false,
   ) {
     this.data = defaultData;
   }
 
   async save() {
-    await fs.writeFile(this.filename, JSON.stringify(this.data, null, 2));
+    await fs.writeFile(
+      this.filename,
+      this.pretty
+        ? JSON.stringify(this.data, null, 2)
+        : JSON.stringify(this.data),
+    );
   }
 
   async update(updater: (data: T) => void) {

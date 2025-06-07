@@ -1,7 +1,7 @@
-import { Logger } from "tslog";
-import { IDB } from "@/domain/models/db";
-import Db from "@/library/fsdb";
-import { ClassUuid } from "@/library/class_uuid";
+import { Logger } from 'tslog';
+import { IDB, IUser } from '@/domain/models/db';
+import Db from '@/library/fsdb';
+import { ClassUuid } from '@/library/class_uuid';
 
 @ClassUuid()
 export class CommunardsManager {
@@ -10,38 +10,79 @@ export class CommunardsManager {
     private readonly db: Db<IDB>,
   ) {}
 
-  async addCommunard(login: string): Promise<boolean> {
-    if (this.isCommunard(login)) {
-      this.logger.info(`Communard ${login} already exists`);
+  async addCommunard(userId: number, username: string): Promise<boolean> {
+    if (this.isCommunard(userId)) {
+      this.logger.info(`Communard ${username} (${userId}) already exists`);
       return false;
     }
-    this.db.update((data) => data.communards.push(login));
-    this.logger.info(`Communard ${login} added`);
+    await this.db.update((data) =>
+      data.communards.push({ telegramId: userId, username }),
+    );
+    this.logger.info(`Communard ${username} (${userId}) added`);
     return true;
   }
 
-  async delCommunard(login: string): Promise<boolean> {
-    if (!this.isCommunard(login)) {
-      this.logger.info(`Communard ${login} not found`);
+  async setCommunardUsername(
+    userId: number,
+    username: string,
+  ): Promise<boolean> {
+    const communard = this.db.data!.communards.find(
+      (c) => c.telegramId === userId,
+    );
+
+    if (!communard) {
+      this.logger.info(`Communard (${userId}) not found`);
       return false;
     }
-    this.db.update((data) => {
-      data.communards = data.communards.filter((communard) => communard.toLocaleLowerCase() !== login.toLocaleLowerCase());
+
+    if (communard.username === username) {
+      return true;
+    }
+
+    communard.username = username;
+    await this.db.save();
+    return true;
+  }
+
+  async delCommunardByUserId(userId: number): Promise<boolean> {
+    if (!this.isCommunard(userId)) {
+      this.logger.info(`Communard (${userId}) not found`);
+      return false;
+    }
+    await this.db.update((data) => {
+      data.communards = data.communards.filter(
+        (communard) => communard.telegramId !== userId,
+      );
     });
-    this.logger.info(`Communard ${login} deleted`);
+    this.logger.info(`Communard ${userId} deleted`);
     return true;
   }
 
-  getCommunards(): string[] {
+  async delCommunardByUsername(username: string): Promise<boolean> {
+    const communard = this.db.data!.communards.find(
+      (c) => c.username === username,
+    );
+    return this.delCommunardByUserId(communard?.telegramId ?? -1);
+  }
+
+  getCommunards(): IUser[] {
     return this.db.data!.communards;
   }
 
-  async setCommunards(names: string[]): Promise<void> {
-    this.db.update((data) => data.communards = names);
-    this.logger.info(`Communards set to ${names.join(", ")}`);
+  async setCommunards(userIds: number[]): Promise<void> {
+    await this.db.update(
+      (data) =>
+        (data.communards = userIds.map((id) => ({
+          telegramId: id,
+          username: '',
+        }))),
+    );
+    this.logger.info(`Communards set to ${userIds.join(', ')}`);
   }
 
-  isCommunard(login: string): boolean {
-    return this.db.data!.communards.map((communard) => communard.toLowerCase()).includes(login.toLowerCase());
+  isCommunard(userId: number): boolean {
+    return this.db
+      .data!.communards.map((communard) => communard.telegramId)
+      .includes(userId);
   }
 }

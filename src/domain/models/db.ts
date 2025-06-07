@@ -1,7 +1,13 @@
 import { IVote } from './vote';
 
+export interface IUser {
+  telegramId: number;
+  username: string;
+}
+
 export interface IDB {
-  communards: string[];
+  communards: IUser[];
+  community: IUser[];
   admins: number[];
   votes: IVote[];
   closedVotes: IVote[];
@@ -9,6 +15,7 @@ export interface IDB {
 
 export const defaultData: IDB = {
   communards: [],
+  community: [],
   admins: [],
   votes: [],
   closedVotes: [],

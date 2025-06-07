@@ -30,6 +30,7 @@ export interface IVote {
   options: IVoteOption[];
   voices: IVoteVoice[];
 
+  createdBy: number;
   createdAt: number;
   updatedAt: number;
   closedAt: number | null;

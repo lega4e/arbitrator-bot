@@ -11,7 +11,7 @@ import {
   setCommunardsWizard,
 } from './scenes/communards';
 import { emj } from './domain/emoji';
-import { IDB } from '@/domain/models/db';
+import { IDB, IUser } from '@/domain/models/db';
 import Db from '@/library/fsdb';
 import VoteManager from '@/features/vote/vote_manager';
 import { btn } from './domain/buttons';
@@ -22,6 +22,7 @@ import {
   createChoiceVoteScene,
 } from './scenes/create_vote';
 import { IConfig } from '@/domain/models/config';
+import { createUserLink } from '@/library/telegraf/utils/url';
 
 export class Bot {
   private scenes: Record<string, SceneWrapper> = {};
@@ -55,6 +56,19 @@ export class Bot {
       { command: 'create_vote', description: 'Создать голосование' },
     ]);
 
+    // set username
+    this.bot.use(async (ctx, next) => {
+      const userId = ctx.from?.id ?? -1;
+      if (this.communardsManager.isCommunard(userId)) {
+        await this.communardsManager.setCommunardUsername(
+          userId,
+          ctx.from?.username ?? '',
+        );
+      }
+      return next();
+    });
+
+    // check group and ban strangers
     this.bot.use(async (ctx, next) => {
       if (ctx.chat?.type !== 'group') {
         return next();
@@ -66,7 +80,7 @@ export class Bot {
 
       if (
         !this.db.data.admins.includes(ctx.from?.id ?? 0) &&
-        !this.communardsManager.isCommunard(ctx.from?.username ?? '')
+        !this.communardsManager.isCommunard(ctx.from?.id ?? -1)
       ) {
         this.logger.info('not admin and not communard');
         return;
@@ -75,6 +89,7 @@ export class Bot {
       return next();
     });
 
+    // ignore no private messages
     this.bot.use(async (ctx, next) => {
       if (ctx.chat?.type !== 'private') {
         return;
@@ -82,6 +97,7 @@ export class Bot {
       return next();
     });
 
+    // session
     this.bot.use(
       session({
         defaultSession: () => ({
@@ -110,6 +126,7 @@ export class Bot {
       return next();
     });
 
+    // setup context
     this.bot.use(async (ctx, next) => {
       ctx.helper = new BotContextHelper(ctx);
       ctx.helper.set(CommunardsManager, this.communardsManager);
@@ -118,20 +135,10 @@ export class Bot {
       return next();
     });
 
-    this.bot.command('cancel', async (ctx) => {
-      ctx.session = {
-        namedData: {},
-        sceneStack: [],
-        data: {},
-      };
-      await ctx.reply(
-        `${emj.cancel} Действие отменено`,
-        Markup.keyboard([[btn.createVote]])
-          .resize()
-          .oneTime(),
-      );
-    });
+    // cancel action
+    this.bot.command('cancel', (ctx) => this.handleCommandCancel(ctx));
 
+    // scenes
     this.bot.use(
       new Scenes.Stage<BotContext>(
         [
@@ -195,13 +202,9 @@ export class Bot {
     });
   }
 
-  async start(): Promise<void> {
+  async launch(): Promise<void> {
+    this.logger.info('Bot launching...');
     await this.bot.launch();
-  }
-
-  async stop(): Promise<void> {
-    this.bot.stop('SIGINT');
-    console.log('Bot stopped');
   }
 
   // HANDLERS
@@ -220,8 +223,29 @@ export class Bot {
       await ctx.reply(`${emj.fail} Список коммунаров пуст`);
       return;
     }
+
+    const com2str = (com: IUser) =>
+      com.username
+        ? `@${com.username} (<code>${com.telegramId}</code>)`
+        : createUserLink(com.telegramId, com.telegramId);
+
     await ctx.reply(
-      `${emj.info} Список коммунаров:\n\n${communards.join('\n')}`,
+      `${emj.info} Список коммунаров:\n\n${communards.map(com2str).join('\n')}`,
+      { parse_mode: 'HTML' },
+    );
+  }
+
+  private async handleCommandCancel(ctx: BotContext): Promise<void> {
+    ctx.session = {
+      namedData: {},
+      sceneStack: [],
+      data: {},
+    };
+    await ctx.reply(
+      `${emj.cancel} Действие отменено`,
+      Markup.keyboard([[btn.createVote]])
+        .resize()
+        .oneTime(),
     );
   }
 
@@ -234,11 +258,7 @@ export class Bot {
   }
 
   private async checkIsCommunard(ctx: BotContext, action: any): Promise<void> {
-    if (
-      !(await this.communardsManager.isCommunard(
-        '@' + (ctx.from?.username ?? ''),
-      ))
-    ) {
+    if (!(await this.communardsManager.isCommunard(ctx.from?.id ?? -1))) {
       await ctx.reply(
         `${emj.angry} Ты кто такой? Нет, не отвечай, я не знаю тебя`,
       );

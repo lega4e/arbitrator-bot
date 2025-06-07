@@ -7,6 +7,7 @@ import { BotContext } from '@/library/telegraf/domain/bot_context';
 import { emj } from '../domain/emoji';
 import { CommunardsManager } from '@/features/db/communards_manager';
 import { format } from 'date-fns';
+import { ignoreMessageNotModified } from '@/library/telegraf/utils/telegram_api_errors';
 
 class VoteExternalManager implements IVoteExternalManager {
   constructor(
@@ -24,49 +25,36 @@ class VoteExternalManager implements IVoteExternalManager {
 
   async updateVote(vote: IVote) {
     const text = this.makeText(vote);
+
+    let makeParams = () => ({
+      reply_markup: vote.closedAt
+        ? undefined
+        : {
+            inline_keyboard: this.makeInlineKeyboard(vote),
+          },
+      parse_mode: 'HTML' as any,
+      ...(this.config.topicId != null
+        ? { message_thread_id: this.config.topicId }
+        : {}),
+    });
+
     if (vote.tg) {
       this.logger.info(`Updating vote: ${vote.id}`);
-      try {
+      await ignoreMessageNotModified(async () => {
         await this.bot.telegram.editMessageText(
-          vote.tg.chatId,
-          vote.tg.messageId,
-          vote.tg.topicId?.toString(),
+          vote.tg!.chatId,
+          vote.tg!.messageId,
+          vote.tg!.topicId?.toString(),
           text,
-          {
-            reply_markup: vote.closedAt
-              ? undefined
-              : {
-                  inline_keyboard: this.makeInlineKeyboard(vote),
-                },
-            parse_mode: 'HTML',
-          },
+          makeParams(),
         );
-      } catch (e: any) {
-        if (
-          e?.response?.error_code === 400 &&
-          e?.response?.description?.includes('message is not modified')
-        ) {
-          this.logger.info('Игнорируем ошибку: сообщение не изменено');
-        } else {
-          throw e;
-        }
-      }
+      });
     } else {
       this.logger.info(`Sending vote: ${vote.id}`);
       const message = await this.bot.telegram.sendMessage(
         this.config.groupId,
         text,
-        {
-          ...(this.config.topicId != null
-            ? { message_thread_id: this.config.topicId }
-            : {}),
-          reply_markup: vote.closedAt
-            ? undefined
-            : {
-                inline_keyboard: this.makeInlineKeyboard(vote),
-              },
-          parse_mode: 'HTML',
-        },
+        makeParams(),
       );
       vote.tg = {
         chatId: message.chat.id,
@@ -87,8 +75,7 @@ class VoteExternalManager implements IVoteExternalManager {
         return;
       }
 
-      username = '@' + username;
-      if (!(await this.communardsManager.isCommunard(username))) {
+      if (!(await this.communardsManager.isCommunard(ctx.from.id))) {
         await ctx.answerCbQuery(`${emj.fail} Ты не имеешь права голоса`, {
           show_alert: true,
         });
@@ -97,8 +84,8 @@ class VoteExternalManager implements IVoteExternalManager {
 
       const voteId = ctx.match[1];
       const optionId = parseInt(ctx.match[2]);
-      await this.handleTapOption(voteId, optionId, ctx.from.id, username);
-      await ctx.answerCbQuery(`${emj.ok} Голос учтён!`);
+      await this.handleTapOption(voteId, optionId, ctx.from.id, '@' + username);
+      await ctx.answerCbQuery(`${emj.ok} Твой голос учтён!`);
     });
   }
 
@@ -112,6 +99,7 @@ class VoteExternalManager implements IVoteExternalManager {
 
     const leaderOptions = this.calculateLeaderOptions(vote);
     const users = new Set(vote.voices.map((v) => v.userId));
+
     const options = vote.options
       .map((o) => {
         const voices = vote.voices.filter((v) => v.optionId === o.id);
@@ -171,14 +159,12 @@ class VoteExternalManager implements IVoteExternalManager {
   }
 
   private makeInlineKeyboard(vote: IVote) {
-    return vote.options.map((o) => {
-      return [
-        {
-          text: o.text,
-          callback_data: `vote_${vote.id}_option_${o.id}`,
-        },
-      ];
-    });
+    return vote.options.map((o) => [
+      {
+        text: o.text,
+        callback_data: `vote_${vote.id}_option_${o.id}`,
+      },
+    ]);
   }
 
   private calculateLeaderOptions(vote: IVote): number[] {

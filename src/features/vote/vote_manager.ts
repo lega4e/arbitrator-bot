@@ -84,7 +84,12 @@ export default class VoteManager {
     }, 1000);
   }
 
-  makeVote(question: string, options: string[], type: VoteType): IVote {
+  makeVote(
+    question: string,
+    options: string[],
+    type: VoteType,
+    userId: number,
+  ): IVote {
     return {
       id: uuidv4(),
       tg: null,
@@ -98,6 +103,7 @@ export default class VoteManager {
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime(),
       closedAt: null,
+      createdBy: userId,
     };
   }
 

@@ -10,7 +10,7 @@ import { Telegraf } from 'telegraf';
 import VoteExternalManager from '@/features/bot/managers/vote_external_manager';
 
 export async function makeBot() {
-  const db = new Db<IDB>('db.json', defaultData);
+  const db = new Db<IDB>(config.dbPath, defaultData, config.debug);
   await db.load();
 
   const logger = new Logger({

@@ -12,9 +12,58 @@ import { createTelegramMessageLink } from '@/library/telegraf/utils/url';
 class CreateVoteData {
   question: string = '';
   options: string[] = [];
+  type: VoteType | null = null;
 }
 
 const endButton = `${emj.ok2} Закончить`;
+
+async function makePreviewAndAskForConfirmation(
+  ctx: BotContext,
+  data: CreateVoteData,
+  qbCreate: string = 'QBcreateVote',
+  qbRecreate: string = 'QBrecreateVote',
+  qbCancel: string = 'QBcancelCreationVote',
+) {
+  const manager = ctx.helper.get<VoteManager>(VoteManager)!;
+  const voteRaw = manager.makeVote(
+    data.question,
+    data.options,
+    data.type!,
+    ctx.from!.id,
+  );
+  ctx.helper.named.set('voteRaw', voteRaw);
+  const text = manager.makePreviewText(voteRaw);
+  await ctx.reply(text, { parse_mode: 'HTML' });
+  await ctx.reply(
+    `${emj.edit} Всё верно?`,
+    Markup.inlineKeyboard([
+      [Markup.button.callback('Да, запустить голосование!', qbCreate)],
+      [Markup.button.callback('Пересоздать', qbRecreate)],
+      [Markup.button.callback('Отменить создание', qbCancel)],
+    ]),
+  );
+}
+
+async function startVote(ctx: BotContext) {
+  const manager = ctx.helper.get<VoteManager>(VoteManager)!;
+  const vote = await manager.startVote(ctx.helper.named.get('voteRaw'));
+  const messageLink = createTelegramMessageLink(
+    vote.tg!.chatId,
+    vote.tg!.messageId,
+    vote.tg!.topicId,
+  );
+  await ctx.reply(
+    `${emj.ok2} <a href="${messageLink}">` +
+      `Голосование успешно запущено!` +
+      `</a>`,
+    {
+      parse_mode: 'HTML',
+      reply_markup: Markup.keyboard([[btn.createVote]])
+        .resize()
+        .oneTime().reply_markup,
+    },
+  );
+}
 
 class CreateVoteScene extends SceneWrapper {
   private _scene: Scenes.WizardScene<BotContext>;
@@ -94,60 +143,30 @@ class CreateYesNoVoteScene extends SceneWrapper {
       async (ctx) => {
         if (!ctx.message || !('text' in ctx.message)) {
           await ctx.reply(`${emj.fail} Отправь текстовое сообщение!`);
-          return;
+        } else {
+          await makePreviewAndAskForConfirmation(ctx, {
+            question: ctx.message.text,
+            options: ['Да', 'Нет'],
+            type: VoteType.YesNo,
+          });
         }
-        const question = ctx.message.text;
-        const manager = ctx.helper.get<VoteManager>(VoteManager)!;
-        const voteRaw = manager.makeVote(
-          question,
-          ['Да', 'Нет'],
-          VoteType.YesNo,
-        );
-        ctx.helper.named.set('voteRaw', voteRaw);
-        const text = manager.makePreviewText(voteRaw);
-        await ctx.reply(text, { parse_mode: 'HTML' });
-        await ctx.reply(
-          `${emj.edit} Всё верно?`,
-          Markup.inlineKeyboard([
-            [
-              Markup.button.callback(
-                'Да, запустить голосование!',
-                'QBcreateYesNoVote',
-              ),
-            ],
-            [Markup.button.callback('Пересоздать', 'QBrecreateYesNoVote')],
-          ]),
-        );
-        return;
       },
     );
 
-    this._scene.action('QBcreateYesNoVote', async (ctx) => {
+    this._scene.action('QBcreateVote', async (ctx) => {
       await ctx.answerCbQuery(`Запускаю...`);
-      const manager = ctx.helper.get<VoteManager>(VoteManager)!;
-      const vote = await manager.startVote(ctx.helper.named.get('voteRaw'));
-      const messageLink = createTelegramMessageLink(
-        vote.tg!.chatId,
-        vote.tg!.messageId,
-        vote.tg!.topicId,
-      );
-      await ctx.reply(
-        `${emj.ok2} <a href="${messageLink}">` +
-          `Голосование успешно запущено!` +
-          `</a>`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: Markup.keyboard([[btn.createVote]])
-            .resize()
-            .oneTime().reply_markup,
-        },
-      );
+      await startVote(ctx);
       return ctx.scene.leave();
     });
 
-    this._scene.action('QBrecreateYesNoVote', async (ctx) => {
+    this._scene.action('QBrecreateVote', async (ctx) => {
       await ctx.answerCbQuery(`Пересоздаю...`);
       await ctx.reply(`${emj.edit} Введи вопрос для голосования`);
+    });
+
+    this._scene.action('QBcancelCreationVote', async (ctx) => {
+      await ctx.answerCbQuery(`Отмена...`);
+      return ctx.scene.leave();
     });
   }
 
@@ -164,7 +183,11 @@ class CreateChoiceVoteScene extends SceneWrapper {
     this._scene = new Scenes.WizardScene<BotContext>(
       'createChoiceVote',
       async (ctx) => {
-        ctx.helper.set(CreateVoteData, { question: '', options: [] });
+        ctx.helper.set(CreateVoteData, {
+          question: '',
+          options: [],
+          type: ctx.helper.named.get<VoteType>('type'),
+        });
         await ctx.reply(`${emj.edit} Введи вопрос для голосования`);
         return ctx.wizard.next();
       },
@@ -206,59 +229,35 @@ class CreateChoiceVoteScene extends SceneWrapper {
         ctx.helper.get<CreateVoteData>(CreateVoteData)!;
       if (options.length < 2) {
         await ctx.reply(`${emj.fail} Требуется минимум 2 варианта ответа`);
-        return;
+      } else {
+        await makePreviewAndAskForConfirmation(ctx, {
+          question,
+          options,
+          type: ctx.helper.named.get<VoteType>('type'),
+        });
       }
-      const manager = ctx.helper.get<VoteManager>(VoteManager)!;
-      const voteRaw = manager.makeVote(
-        question,
-        options,
-        ctx.helper.named.get<VoteType>('type'),
-      );
-      ctx.helper.named.set('voteRaw', voteRaw);
-      const text = manager.makePreviewText(voteRaw);
-      await ctx.reply(text, { parse_mode: 'HTML' });
-      await ctx.reply(
-        `${emj.edit} Всё верно?`,
-        Markup.inlineKeyboard([
-          [
-            Markup.button.callback(
-              'Да, запустить голосование!',
-              'QBcreateChoiceVote',
-            ),
-          ],
-          [Markup.button.callback('Пересоздать', 'QBrecreateChoiceVote')],
-        ]),
-      );
     });
 
-    this._scene.action('QBcreateChoiceVote', async (ctx) => {
+    this._scene.action('QBcreateVote', async (ctx) => {
       await ctx.answerCbQuery(`Запускаю...`);
-      const manager = ctx.helper.get<VoteManager>(VoteManager)!;
-      const vote = await manager.startVote(ctx.helper.named.get('voteRaw'));
-      const messageLink = createTelegramMessageLink(
-        vote.tg!.chatId,
-        vote.tg!.messageId,
-        vote.tg!.topicId,
-      );
-      await ctx.reply(
-        `${emj.ok2} <a href="${messageLink}">` +
-          `Голосование успешно запущено!` +
-          `</a>`,
-        {
-          parse_mode: 'HTML',
-          reply_markup: Markup.keyboard([[btn.createVote]])
-            .resize()
-            .oneTime().reply_markup,
-        },
-      );
+      await startVote(ctx);
       return ctx.scene.leave();
     });
 
-    this._scene.action('QBrecreateChoiceVote', async (ctx) => {
+    this._scene.action('QBrecreateVote', async (ctx) => {
       await ctx.answerCbQuery(`Пересоздаю...`);
-      ctx.helper.set(CreateVoteData, { question: '', options: [] });
+      ctx.helper.set(CreateVoteData, {
+        question: '',
+        options: [],
+        type: ctx.helper.named.get<VoteType>('type'),
+      });
       await ctx.reply(`${emj.edit} Введи вопрос для голосования`);
       return ctx.wizard.selectStep(1);
+    });
+
+    this._scene.action('QBcancelCreationVote', async (ctx) => {
+      await ctx.answerCbQuery(`Отмена...`);
+      return ctx.scene.leave();
     });
   }
 

@@ -8,4 +8,11 @@ function createTelegramMessageLink(
   return `https://t.me/c/${cleanGroupId}/${topicIdStr}${messageId}`;
 }
 
-export { createTelegramMessageLink };
+function createUserLink(
+  userId: number,
+  displayText: any = 'Пользователь',
+): string {
+  return `<a href="tg://user?id=${userId}">${displayText}</a>`;
+}
+
+export { createTelegramMessageLink, createUserLink };

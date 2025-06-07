@@ -13,7 +13,6 @@ export class emj {
   static point = '👉';
   static best = '👑';
   static angry = '🤬';
-  static vote = '🗳️';
 
   // controls
   static question = '❓';
@@ -37,10 +36,5 @@ export class emj {
   static menu = '☰';
 
   // entities
-  static mailing = '📧';
-  static tag = '🏷️';
-  static event = '🎉';
-  static help = '💬';
-  static admin = '👑';
-  static settings = '⚙️';
+  static vote = '🗳️';
 }
