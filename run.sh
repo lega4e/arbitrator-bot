@@ -1,3 +1,4 @@
 #!bash
 cd `dirname $BASH_SOURCE`
-npm run start
+cp .env.prod .env
+/root/.nvm/versions/node/v22.16.0/bin/node dist/index.js
