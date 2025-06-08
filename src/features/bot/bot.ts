@@ -221,7 +221,7 @@ export class Bot {
   // HANDLERS
   private async handleCommandStart(ctx: BotContext): Promise<void> {
     await ctx.reply(
-      `${emj.hello} Привет! Я бот для управления коммунарами.`,
+      `${emj.hello} Привет! Я бот для голосований в КоммуЧате :)`,
       Markup.keyboard([[btn.createVote]])
         .resize()
         .oneTime(),
