@@ -1,3 +1,5 @@
+import { IUser } from './db';
+
 export interface IVoteOption {
   text: string;
   id: number;
@@ -13,6 +15,7 @@ export enum VoteType {
   YesNo = 'yes_no',
   SingleChoice = 'choice',
   MultiChoice = 'multi_choice',
+  VoteForVoice = 'vote_for_voice',
 }
 
 export interface IVoteTg {
@@ -29,6 +32,7 @@ export interface IVote {
   question: string;
   options: IVoteOption[];
   voices: IVoteVoice[];
+  forUser: (IUser & { name: string }) | null;
 
   createdBy: number;
   createdAt: number;

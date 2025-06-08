@@ -2,6 +2,7 @@ import { BotContext } from '@/library/telegraf/domain/bot_context';
 import { CommunardsManager } from '@/features/db/communards_manager';
 import { Scenes } from 'telegraf';
 import { emj } from '../domain/emoji';
+import { UserIdValidator, UserValidator } from './utils';
 
 // Сцена для добавления коммунара
 const addCommunardWizard = new Scenes.WizardScene<BotContext>(
@@ -11,18 +12,11 @@ const addCommunardWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
   async (ctx) => {
-    if (!ctx.message || !('text' in ctx.message)) {
-      await ctx.reply(`${emj.fail} Отправь текстовое сообщение`);
-      return;
-    }
-    const userId = parseInt(ctx.message.text);
-    if (isNaN(userId)) {
-      await ctx.reply(`${emj.fail} id должен быть числом. Попробуй ещё раз`);
-      return;
-    }
-    await ctx.helper.get(CommunardsManager)!.addCommunard(userId, '');
-    await ctx.reply(`${emj.ok} Коммунар ${userId} успешно добавлен!`);
-    return ctx.scene.leave();
+    new UserIdValidator().validate(ctx).execute(ctx, async (ctx, value) => {
+      await ctx.helper.get(CommunardsManager)!.addCommunard(value, '');
+      await ctx.reply(`${emj.ok} Коммунар ${value} успешно добавлен!`);
+      return ctx.scene.leave();
+    });
   },
 );
 
@@ -34,31 +28,20 @@ const delCommunardWizard = new Scenes.WizardScene<BotContext>(
     return ctx.wizard.next();
   },
   async (ctx) => {
-    if (!ctx.message || !('text' in ctx.message)) {
-      await ctx.reply(`${emj.fail} Отправь текстовое сообщение`);
-      return;
-    }
+    new UserValidator().validate(ctx).execute(ctx, async (ctx, value) => {
+      const manager = ctx.helper.get(CommunardsManager)!;
 
-    let success = false;
-    const manager = ctx.helper.get(CommunardsManager)!;
-    if (ctx.message.text.startsWith('@')) {
-      success = await manager.delCommunardByUsername(ctx.message.text);
-    } else {
-      const userId = parseInt(ctx.message.text);
-      if (isNaN(userId)) {
-        await ctx.reply(`${emj.fail} id должен быть числом. Попробуй ещё раз`);
-        return;
-      }
-      success = await manager.delCommunardByUserId(userId);
-    }
+      let success =
+        typeof value === 'string'
+          ? await manager.delCommunardByUsername(value)
+          : await manager.delCommunardByUserId(value);
 
-    if (success) {
-      await ctx.reply(`${emj.ok} Коммунар успешно удален!`);
-    } else {
-      await ctx.reply(`${emj.fail} Коммунар не найден!`);
-    }
+      success
+        ? await ctx.reply(`${emj.ok} Коммунар успешно удален!`)
+        : await ctx.reply(`${emj.fail} Коммунар не найден!`);
 
-    return ctx.scene.leave();
+      return ctx.scene.leave();
+    });
   },
 );
 

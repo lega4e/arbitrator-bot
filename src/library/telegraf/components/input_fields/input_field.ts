@@ -1,7 +1,7 @@
-import { BotContext } from "@/library/telegraf/domain/bot_context";
-import { Validator } from "@/library/telegraf/helpers/validators/validators";
-import { Message } from "telegraf/typings/core/types/typegram";
-import { v4 as uuidv4 } from "uuid";
+import { BotContext } from '@/library/telegraf/domain/bot_context';
+import { Validator } from '@/library/telegraf/helpers/validators/validators';
+import { Message } from 'telegraf/typings/core/types/typegram';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface InputFieldProps<T> {
   prompt: string;
@@ -25,12 +25,12 @@ export class InputField<T> {
       return [ctx.message! as T, true];
     }
 
-    const [value, isValid] = this.props.validator.validate(ctx.message!);
-    if (!isValid) {
-      await ctx.reply(this.props.errorMessage);
-      return [null, false];
-    }
+    // const [value, isValid, error] = this.props.validator.validate(ctx.message!);
+    // if (!isValid) {
+    //   await ctx.reply(this.props.errorMessage);
+    //   return [null, false];
+    // }
 
-    return [value, true];
+    return [null, true];
   }
 }

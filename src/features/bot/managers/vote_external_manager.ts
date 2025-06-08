@@ -95,6 +95,20 @@ class VoteExternalManager implements IVoteExternalManager {
 
   // service
   private makeText(vote: IVote) {
+    if (vote.type === VoteType.VoteForVoice) {
+      vote.options = [
+        {
+          id: 0,
+          text: 'Да',
+        },
+        {
+          id: 1,
+          text: 'Нет',
+        },
+      ];
+      vote.question = `Будет ли человек по имени ${vote.forUser?.name} иметь право голоса?`;
+    }
+
     const title = `<b><u>${vote.question}</u></b>`;
 
     const leaderOptions = this.calculateLeaderOptions(vote);
@@ -115,7 +129,7 @@ class VoteExternalManager implements IVoteExternalManager {
 
         return [
           `${emoji} ${o.text}`,
-          ...(voices.length > 0
+          ...(voices.length > 0 && vote.type != VoteType.VoteForVoice
             ? [`<i>${voices.map((v) => `${v.userLogin}`).join(', ')}</i>`]
             : []),
           `<i>Голосов: ${voices.length}, ${percent.toFixed(0)}%</i>`,
@@ -134,6 +148,11 @@ class VoteExternalManager implements IVoteExternalManager {
       if (vote.type === VoteType.YesNo) {
         result =
           leaderOptions[0] == 0 ? 'Решение принято!' : 'Решение не принято!';
+      } else if (vote.type === VoteType.VoteForVoice) {
+        result =
+          leaderOptions[0] == 0
+            ? `Человек получает право голоса!`
+            : `Человек не получает право голоса!`;
       } else {
         const leaders = vote.options.filter((o) =>
           leaderOptions.includes(o.id),
@@ -168,10 +187,12 @@ class VoteExternalManager implements IVoteExternalManager {
   }
 
   private calculateLeaderOptions(vote: IVote): number[] {
-    if (vote.type === VoteType.YesNo) {
+    if (vote.type === VoteType.YesNo || vote.type === VoteType.VoteForVoice) {
       const yesVotes = vote.voices.filter((v) => v.optionId === 0).length;
       return (yesVotes * 100) / vote.voices.length >
-        this.config.percentForYesNoVote
+        (vote.type === VoteType.YesNo
+          ? this.config.percentForYesNoVote
+          : this.config.percentForVoteForVoice)
         ? [0]
         : [1];
     } else {

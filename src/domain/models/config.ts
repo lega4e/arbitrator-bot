@@ -9,6 +9,7 @@ export interface IConfig {
   topicId: number | null;
   voteLifeTimeSeconds: number;
   percentForYesNoVote: number;
+  percentForVoteForVoice: number;
   debug: boolean;
 }
 
@@ -23,5 +24,8 @@ export const config: IConfig = {
   percentForYesNoVote: process.env.PERCENT_FOR_YES_NO_VOTE
     ? parseInt(process.env.PERCENT_FOR_YES_NO_VOTE)
     : 70,
+  percentForVoteForVoice: process.env.PERCENT_FOR_VOTE_FOR_VOICE
+    ? parseInt(process.env.PERCENT_FOR_VOTE_FOR_VOICE)
+    : 79.5,
   debug: process.env.DEBUG === 'true',
 };

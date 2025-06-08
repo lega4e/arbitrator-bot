@@ -1,6 +1,6 @@
 import { Logger } from 'tslog';
 import Db from '@/library/fsdb';
-import { IDB } from '@/domain/models/db';
+import { IDB, IUser } from '@/domain/models/db';
 import { IConfig } from '@/domain/models/config';
 import { IVote, VoteType } from '@/domain/models/vote';
 import { v4 as uuidv4 } from 'uuid';
@@ -89,6 +89,7 @@ export default class VoteManager {
     options: string[],
     type: VoteType,
     userId: number,
+    forUser: (IUser & { name: string }) | null,
   ): IVote {
     return {
       id: uuidv4(),
@@ -104,6 +105,7 @@ export default class VoteManager {
       updatedAt: new Date().getTime(),
       closedAt: null,
       createdBy: userId,
+      forUser,
     };
   }
 

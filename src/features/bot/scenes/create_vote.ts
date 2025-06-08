@@ -7,12 +7,17 @@ import { VoteType } from '@/domain/models/vote';
 import { SceneWrapper } from '@/library/telegraf/scenes/scene_wrapper';
 import { btn } from '../domain/buttons';
 import { createTelegramMessageLink } from '@/library/telegraf/utils/url';
+import { UserValidator } from './utils';
+import { CommunardsManager } from '@/features/db/communards_manager';
+import { IUser } from '@/domain/models/db';
+import { TextValidator } from '@/library/telegraf/helpers/validators/validators';
 
 @ClassUuid()
 class CreateVoteData {
   question: string = '';
   options: string[] = [];
   type: VoteType | null = null;
+  forUser: (IUser & { name: string }) | null = null;
 }
 
 const endButton = `${emj.ok2} Закончить`;
@@ -30,6 +35,7 @@ async function makePreviewAndAskForConfirmation(
     data.options,
     data.type!,
     ctx.from!.id,
+    data.forUser,
   );
   ctx.helper.named.set('voteRaw', voteRaw);
   const text = manager.makePreviewText(voteRaw);
@@ -71,6 +77,7 @@ class CreateVoteScene extends SceneWrapper {
   constructor(
     private readonly createYesNoVoteScene: CreateYesNoVoteScene,
     private readonly createChoiceVoteScene: CreateChoiceVoteScene,
+    private readonly createVoteForVoiceScene: CreateVoteForVoice,
   ) {
     super('createVote');
     this._scene = new Scenes.WizardScene<BotContext>(
@@ -95,6 +102,12 @@ class CreateVoteScene extends SceneWrapper {
                     'createMultiChoiceVote',
                   ),
                 ],
+                [
+                  Markup.button.callback(
+                    'Голосование за право голоса',
+                    'createVoteForVoice',
+                  ),
+                ],
               ]),
             );
           },
@@ -116,6 +129,10 @@ class CreateVoteScene extends SceneWrapper {
     this._scene.action('createMultiChoiceVote', async (ctx) => {
       await ctx.helper.named.set('type', VoteType.MultiChoice);
       await this.createChoiceVoteScene.enter(ctx);
+    });
+
+    this._scene.action('createVoteForVoice', async (ctx) => {
+      await this.createVoteForVoiceScene.enter(ctx);
     });
 
     this._scene.hears(/.*/, (ctx) => {
@@ -148,6 +165,7 @@ class CreateYesNoVoteScene extends SceneWrapper {
             question: ctx.message.text,
             options: ['Да', 'Нет'],
             type: VoteType.YesNo,
+            forUser: null,
           });
         }
       },
@@ -187,6 +205,7 @@ class CreateChoiceVoteScene extends SceneWrapper {
           question: '',
           options: [],
           type: ctx.helper.named.get<VoteType>('type'),
+          forUser: null,
         });
         await ctx.reply(`${emj.edit} Введи вопрос для голосования`);
         return ctx.wizard.next();
@@ -234,6 +253,7 @@ class CreateChoiceVoteScene extends SceneWrapper {
           question,
           options,
           type: ctx.helper.named.get<VoteType>('type'),
+          forUser: null,
         });
       }
     });
@@ -250,6 +270,7 @@ class CreateChoiceVoteScene extends SceneWrapper {
         question: '',
         options: [],
         type: ctx.helper.named.get<VoteType>('type'),
+        forUser: null,
       });
       await ctx.reply(`${emj.edit} Введи вопрос для голосования`);
       return ctx.wizard.selectStep(1);
@@ -266,11 +287,95 @@ class CreateChoiceVoteScene extends SceneWrapper {
   }
 }
 
+class CreateVoteForVoice extends SceneWrapper {
+  private _scene: Scenes.WizardScene<BotContext>;
+
+  constructor() {
+    super('createVoteForVoice');
+
+    this._scene = new Scenes.WizardScene<BotContext>(
+      this.sceneName,
+      async (ctx) => {
+        await ctx.reply(
+          `${emj.edit} Введи имя человека, который запрашивает право голоса`,
+        );
+        return ctx.wizard.next();
+      },
+      async (ctx) => {
+        new TextValidator().validate(ctx).execute(ctx, async (ctx, value) => {
+          ctx.helper.named.set('name', value);
+          await ctx.reply(
+            `${emj.edit} Введи айди/логин человека, который запрашивает право голоса`,
+            Markup.inlineKeyboard([
+              [Markup.button.callback('Запросить для себя', 'QBforMe')],
+            ]),
+          );
+          return ctx.wizard.next();
+        });
+      },
+      async (ctx) => {
+        new UserValidator().validate(ctx).execute(ctx, async (ctx, value) => {
+          let forUser: IUser | undefined;
+          const manager = ctx.helper.get(CommunardsManager)!;
+          forUser =
+            typeof value === 'string'
+              ? manager.getCommunardByUsername(value)
+              : manager.getCommunardById(value);
+
+          if (!forUser) {
+            await ctx.reply(`${emj.fail} Коммунар не найден! Попробуй ещё раз`);
+            return;
+          }
+
+          await makePreviewAndAskForConfirmation(ctx, {
+            question: '',
+            options: [],
+            type: VoteType.VoteForVoice,
+            forUser: { ...forUser, name: ctx.helper.named.get<string>('name') },
+          });
+        });
+      },
+    );
+
+    this._scene.action('QBforMe', async (ctx) => {
+      await ctx.answerCbQuery(`Окей`);
+    });
+
+    this._scene.action('QBcreateVote', async (ctx) => {
+      await ctx.answerCbQuery(`Запускаю...`);
+      await startVote(ctx);
+      return ctx.scene.leave();
+    });
+
+    this._scene.action('QBrecreateVote', async (ctx) => {
+      await ctx.answerCbQuery(`Пересоздаю...`);
+      await ctx.reply(`${emj.edit} Введи вопрос для голосования`);
+    });
+
+    this._scene.action('QBcancelCreationVote', async (ctx) => {
+      await ctx.answerCbQuery(`Отмена...`);
+      return ctx.scene.leave();
+    });
+  }
+
+  get scene(): Scenes.WizardScene<BotContext> {
+    return this._scene;
+  }
+}
+
 const createYesNoVoteScene = new CreateYesNoVoteScene();
 const createChoiceVoteScene = new CreateChoiceVoteScene();
+const createVoteForVoiceScene = new CreateVoteForVoice();
+// const createVoteForChatScene = new CreateVoteForChat();
 const createVoteScene = new CreateVoteScene(
   createYesNoVoteScene,
   createChoiceVoteScene,
+  createVoteForVoiceScene,
 );
 
-export { createVoteScene, createYesNoVoteScene, createChoiceVoteScene };
+export {
+  createVoteScene,
+  createYesNoVoteScene,
+  createChoiceVoteScene,
+  createVoteForVoiceScene,
+};

@@ -2,7 +2,7 @@ import { IVote } from './vote';
 
 export interface IUser {
   telegramId: number;
-  username: string;
+  username: string | null;
 }
 
 export interface IDB {

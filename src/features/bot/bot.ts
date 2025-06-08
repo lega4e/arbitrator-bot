@@ -20,13 +20,12 @@ import {
   createVoteScene,
   createYesNoVoteScene,
   createChoiceVoteScene,
+  createVoteForVoiceScene,
 } from './scenes/create_vote';
 import { IConfig } from '@/domain/models/config';
 import { createUserLink } from '@/library/telegraf/utils/url';
 
 export class Bot {
-  private scenes: Record<string, SceneWrapper> = {};
-
   constructor(
     private readonly bot: Telegraf<BotContext>,
     private readonly config: IConfig,
@@ -62,7 +61,7 @@ export class Bot {
       if (this.communardsManager.isCommunard(userId)) {
         await this.communardsManager.setCommunardUsername(
           userId,
-          ctx.from?.username ?? '',
+          '@' + (ctx.from?.username ?? ''),
         );
       }
       return next();
@@ -148,6 +147,7 @@ export class Bot {
           createVoteScene.scene,
           createYesNoVoteScene.scene,
           createChoiceVoteScene.scene,
+          createVoteForVoiceScene.scene,
         ],
         {
           defaultSession: {

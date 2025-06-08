@@ -69,6 +69,14 @@ export class CommunardsManager {
     return this.db.data!.communards;
   }
 
+  getCommunardByUsername(username: string): IUser | undefined {
+    return this.db.data!.communards.find((c) => c.username === username);
+  }
+
+  getCommunardById(id: number): IUser | undefined {
+    return this.db.data!.communards.find((c) => c.telegramId === id);
+  }
+
   async setCommunards(userIds: number[]): Promise<void> {
     await this.db.update(
       (data) =>
