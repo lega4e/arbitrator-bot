@@ -4,7 +4,7 @@
   "description": "Telegram bot for commu-chat",
   "main": "dist/index.js",
   "scripts": {
-    "start": "NODE_NO_WARNINGS=1 node dist/index.js",
+    "start": "cp .env.prod .env && NODE_NO_WARNINGS=1 node dist/index.js",
     "build": "tsc",
     "dev": "cp .env.local .env && tsc && node dist/index.js",
     "docker": "cp .env.docker .env && docker-compose up --build",
