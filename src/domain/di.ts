@@ -15,9 +15,11 @@ export async function makeBot() {
   await db.load();
 
   const logger = new Logger({
-    name: 'MyLogger',
-    minLevel: 0,
     type: 'pretty',
+    minLevel: 0,
+    prettyLogTimeZone: 'local',
+    prettyLogTemplate:
+      '{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}} [{{logLevelName}}]: ',
   });
 
   const bot = new Telegraf<BotContext>(config.botToken);

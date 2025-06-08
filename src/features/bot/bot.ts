@@ -81,11 +81,13 @@ export class Bot {
         !this.db.data.admins.includes(ctx.from?.id ?? 0) &&
         !this.communardsManager.isCommunity(ctx.from?.id ?? -1)
       ) {
-        this.logger.info(`banning ${ctx.from?.id} from ${ctx.chat?.id}`);
-        await ctx.telegram.banChatMember(ctx.chat.id, ctx.from?.id ?? 0);
+        this.logger.info(
+          `banning @${ctx.from?.username} (${ctx.from?.id}) from ${ctx.chat?.id}`,
+        );
         await ctx.reply(
           `${emj.fail} Ты кто такой? Ты что тут забыл..? Иди-ка ты н@#^!`,
         );
+        await ctx.telegram.banChatMember(ctx.chat.id, ctx.from?.id ?? 0);
         return;
       }
 
@@ -185,12 +187,12 @@ export class Bot {
       this.checkAdmin(ctx, () => this.handleCommandSetNoBan(ctx)),
     );
     this.bot.command('create_vote', (ctx) =>
-      this.checkIsConstituency(ctx, () => createVoteScene.enter(ctx)),
+      this.checkIsCommunity(ctx, () => createVoteScene.enter(ctx)),
     );
 
     // keyboard buttons
     this.bot.hears(btn.createVote, (ctx) =>
-      this.checkIsConstituency(ctx, () => createVoteScene.enter(ctx)),
+      this.checkIsCommunity(ctx, () => createVoteScene.enter(ctx)),
     );
 
     // fallbakcs
@@ -278,11 +280,11 @@ export class Bot {
     await action();
   }
 
-  private async checkIsConstituency(
+  private async checkIsCommunity(
     ctx: BotContext,
     action: () => Promise<void>,
   ): Promise<void> {
-    if (!(await this.communardsManager.isConstituency(ctx.from?.id ?? -1))) {
+    if (!this.communardsManager.isCommunity(ctx.from?.id ?? -1)) {
       await ctx.reply(
         `${emj.angry} Ты кто такой? Нет, не отвечай, я не знаю тебя`,
       );
