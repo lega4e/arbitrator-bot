@@ -16,6 +16,7 @@ export enum VoteType {
   SingleChoice = 'choice',
   MultiChoice = 'multi_choice',
   VoteForVoice = 'vote_for_voice',
+  VoteForChat = 'vote_for_chat',
 }
 
 export interface IVoteTg {

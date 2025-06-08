@@ -1,5 +1,5 @@
 import { BotContext } from '@/library/telegraf/domain/bot_context';
-import { CommunardsManager } from '@/features/db/communards_manager';
+import CommunardsManager from '@/features/db/communards_manager';
 import { Scenes } from 'telegraf';
 import { emj } from '../domain/emoji';
 import { UserIdValidator, UserValidator } from './utils';

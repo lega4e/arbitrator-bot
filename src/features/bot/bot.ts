@@ -4,7 +4,7 @@ import {
   BotContextHelper,
 } from '@/library/telegraf/domain/bot_context';
 import { Logger } from 'tslog';
-import { CommunardsManager } from '@/features/db/communards_manager';
+import CommunardsManager from '@/features/db/communards_manager';
 import {
   addCommunardWizard,
   delCommunardWizard,
@@ -15,12 +15,11 @@ import { IDB, IUser } from '@/domain/models/db';
 import Db from '@/library/fsdb';
 import VoteManager from '@/features/vote/vote_manager';
 import { btn } from './domain/buttons';
-import { SceneWrapper } from '@/library/telegraf/scenes/scene_wrapper';
 import {
   createVoteScene,
   createYesNoVoteScene,
   createChoiceVoteScene,
-  createVoteForVoiceScene,
+  createVoteForUserScene,
 } from './scenes/create_vote';
 import { IConfig } from '@/domain/models/config';
 import { createUserLink } from '@/library/telegraf/utils/url';
@@ -58,10 +57,10 @@ export class Bot {
     // set username
     this.bot.use(async (ctx, next) => {
       const userId = ctx.from?.id ?? -1;
-      if (this.communardsManager.isCommunard(userId)) {
-        await this.communardsManager.setCommunardUsername(
+      if (this.communardsManager.isCommunity(userId)) {
+        await this.communardsManager.setUserUsername(
           userId,
-          '@' + (ctx.from?.username ?? ''),
+          ctx.from?.username ?? '',
         );
       }
       return next();
@@ -69,19 +68,24 @@ export class Bot {
 
     // check group and ban strangers
     this.bot.use(async (ctx, next) => {
-      if (ctx.chat?.type !== 'group') {
+      if (
+        !this.db.data.banMode ||
+        !['group', 'supergroup'].includes(ctx.chat?.type ?? '') ||
+        ctx.chat?.id !== this.config.groupId ||
+        ctx.from?.is_bot
+      ) {
         return next();
-      }
-
-      if (ctx.chat.id !== this.config.groupId || ctx.from?.is_bot) {
-        return;
       }
 
       if (
         !this.db.data.admins.includes(ctx.from?.id ?? 0) &&
-        !this.communardsManager.isCommunard(ctx.from?.id ?? -1)
+        !this.communardsManager.isCommunity(ctx.from?.id ?? -1)
       ) {
-        this.logger.info('not admin and not communard');
+        this.logger.info(`banning ${ctx.from?.id} from ${ctx.chat?.id}`);
+        await ctx.telegram.banChatMember(ctx.chat.id, ctx.from?.id ?? 0);
+        await ctx.reply(
+          `${emj.fail} Ты кто такой? Ты что тут забыл..? Иди-ка ты н@#^!`,
+        );
         return;
       }
 
@@ -147,7 +151,7 @@ export class Bot {
           createVoteScene.scene,
           createYesNoVoteScene.scene,
           createChoiceVoteScene.scene,
-          createVoteForVoiceScene.scene,
+          createVoteForUserScene.scene,
         ],
         {
           defaultSession: {
@@ -174,14 +178,19 @@ export class Bot {
     this.bot.command('set_communards', (ctx) =>
       this.checkAdmin(ctx, () => ctx.scene.enter('setCommunards')),
     );
-
+    this.bot.command('set_ban', (ctx) =>
+      this.checkAdmin(ctx, () => this.handleCommandSetBan(ctx)),
+    );
+    this.bot.command('set_noban', (ctx) =>
+      this.checkAdmin(ctx, () => this.handleCommandSetNoBan(ctx)),
+    );
     this.bot.command('create_vote', (ctx) =>
-      this.checkIsCommunard(ctx, () => createVoteScene.enter(ctx)),
+      this.checkIsConstituency(ctx, () => createVoteScene.enter(ctx)),
     );
 
     // keyboard buttons
     this.bot.hears(btn.createVote, (ctx) =>
-      this.checkIsCommunard(ctx, () => createVoteScene.enter(ctx)),
+      this.checkIsConstituency(ctx, () => createVoteScene.enter(ctx)),
     );
 
     // fallbakcs
@@ -215,6 +224,18 @@ export class Bot {
         .resize()
         .oneTime(),
     );
+  }
+
+  private async handleCommandSetBan(ctx: BotContext): Promise<void> {
+    this.db.data.banMode = true;
+    await this.db.save();
+    await ctx.reply(`${emj.ok2} Режим бана включен`);
+  }
+
+  private async handleCommandSetNoBan(ctx: BotContext): Promise<void> {
+    this.db.data.banMode = false;
+    await this.db.save();
+    await ctx.reply(`${emj.ok2} Режим бана выключен`);
   }
 
   private async handleCommandListCommunards(ctx: BotContext): Promise<void> {
@@ -257,8 +278,11 @@ export class Bot {
     await action();
   }
 
-  private async checkIsCommunard(ctx: BotContext, action: any): Promise<void> {
-    if (!(await this.communardsManager.isCommunard(ctx.from?.id ?? -1))) {
+  private async checkIsConstituency(
+    ctx: BotContext,
+    action: () => Promise<void>,
+  ): Promise<void> {
+    if (!(await this.communardsManager.isConstituency(ctx.from?.id ?? -1))) {
       await ctx.reply(
         `${emj.angry} Ты кто такой? Нет, не отвечай, я не знаю тебя`,
       );

@@ -16,7 +16,7 @@ export class UserValidator extends Validator<BotContext, string | number> {
       .validate(ctx)
       .validate((text): [string | number | null, boolean, string | null] => {
         if (/^@[a-zA-Z0-9_]{4,}$/.test(text)) {
-          return [text, true, null];
+          return [text.slice(1), true, null];
         } else if (!isNaN(parseInt(text))) {
           return [parseInt(text), true, null];
         }

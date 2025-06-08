@@ -4,6 +4,7 @@ import { IDB, IUser } from '@/domain/models/db';
 import { IConfig } from '@/domain/models/config';
 import { IVote, VoteType } from '@/domain/models/vote';
 import { v4 as uuidv4 } from 'uuid';
+import VoteLogicManager from './vote_logic_manager';
 
 export interface IVoteExternalManager {
   updateVote(vote: IVote): Promise<void>;
@@ -17,6 +18,7 @@ export default class VoteManager {
     private readonly db: Db<IDB>,
     private readonly config: IConfig,
     private readonly externalManager: IVoteExternalManager,
+    private readonly voteLogicManager: VoteLogicManager,
   ) {}
 
   makePreviewText(vote: IVote) {
@@ -25,62 +27,25 @@ export default class VoteManager {
 
   async startVote(vote: IVote): Promise<IVote> {
     this.logger.info(`Starting vote: ${vote.question}`);
+    vote.createdAt = new Date().getTime();
     await this.externalManager.updateVote(vote);
     await this.db.update((db) => db.votes.push(vote));
     return vote;
   }
 
-  async handleTap(
-    voteId: string,
-    optionId: number,
-    userId: number,
-    userLogin: string,
-  ) {
-    this.logger.info(`Handling tap for vote: ${voteId}, option: ${optionId}`);
-
-    const vote = this._getVoteById(voteId);
-    if (!vote) {
-      this.logger.error(`Vote not found: ${voteId}`);
-      throw new Error(`Vote not found: ${voteId}`);
-    }
-
-    const voicesLen = vote.voices.length;
-    vote.voices = vote.voices.filter(
-      (voice) => !(voice.userId === userId && voice.optionId === optionId),
-    );
-
-    if (vote.voices.length == voicesLen) {
-      if (vote.type != VoteType.MultiChoice) {
-        vote.voices = vote.voices.filter((voice) => voice.userId != userId);
-      }
-      vote.voices.push({ optionId, userId, userLogin });
-    }
-
-    await this.externalManager.updateVote(vote);
-    await this.db.save();
-  }
-
   startCloseVotePolling() {
     setInterval(async () => {
       const now = new Date();
-      const votes = this.db.data.votes;
-      const removeIds: string[] = [];
 
-      for (const vote of votes) {
+      for (const vote of [...this.db.data.votes]) {
         if (
           vote.createdAt + this.config.voteLifeTimeSeconds * 1000 <
           now.getTime()
         ) {
-          vote.closedAt = now.getTime();
+          await this.voteLogicManager.closeVote(vote);
           await this.externalManager.updateVote(vote);
-          this.db.data.closedVotes.push(vote);
-          removeIds.push(vote.id);
         }
       }
-
-      await this.db.update(
-        (db) => (db.votes = db.votes.filter((v) => !removeIds.includes(v.id))),
-      );
     }, 1000);
   }
 
@@ -88,8 +53,8 @@ export default class VoteManager {
     question: string,
     options: string[],
     type: VoteType,
-    userId: number,
     forUser: (IUser & { name: string }) | null,
+    createdByUser: number,
   ): IVote {
     return {
       id: uuidv4(),
@@ -104,12 +69,8 @@ export default class VoteManager {
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime(),
       closedAt: null,
-      createdBy: userId,
+      createdBy: createdByUser,
       forUser,
     };
-  }
-
-  private _getVoteById(id: string): IVote | null {
-    return this.db.data.votes.find((vote) => vote.id === id) || null;
   }
 }
